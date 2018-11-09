@@ -10,9 +10,27 @@ def reusable_graph(func):
     :param function:
     :return:
     """
-    return tf.make_template(func.__name__, func, create_scope_now_=True)
+
+    wrapper = tf.make_template(func.__name__, func, create_scope_now_=True)
+    wrapper = functools.wraps(func)(wrapper)
+
+    return wrapper
+
+def add_summary(name, summary_type):
+    """ decorator to add the result of collection """
+    def make_decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            result = func(*args, **kwargs)
+            summary_type(name, result)
+
+            return result
+        return wrapper
+    return make_decorator
 
 def print_with_time(string):
     """print with time"""
     now = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-    print('[{t}] {s}'.format(t=now, s=string))
+    print(f'[{now}] {string}')
+
+

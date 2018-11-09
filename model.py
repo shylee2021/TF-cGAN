@@ -1,8 +1,9 @@
+'''  '''
 import os
 
 import tensorflow as tf
-from tensorflow.errors import OutOfRangeError
 
+from utils import add_summary
 from utils import print_with_time
 from utils import reusable_graph
 
@@ -10,6 +11,7 @@ from utils import reusable_graph
 class CGAN:
     def __init__(self, name):
         self.name = name
+        self.noise_len = 100
 
     @reusable_graph
     def generator(self, noises, labels, is_training=False):
@@ -57,6 +59,7 @@ class CGAN:
 
         return outputs
 
+    @add_summary('generated_image', tf.summary.image)
     def generate_images(self, labels):
         '''
         generate images with given noises
@@ -64,13 +67,15 @@ class CGAN:
         :param labels:
         :return:
         '''
-        noises = tf.random_normal(labels.shape)
+        noises = tf.random_normal((labels.shape[0], self.noise_len))
         return self.generator(noises, labels)
 
+    @add_summary('generator_loss', tf.summary.scalar)
     def generator_loss(self, real_targets, fake_predictions):
         ''' loss of generator with given predictions of discriminator '''
         return tf.losses.log_loss(real_targets, fake_predictions)
 
+    @add_summary('generator_loss', tf.summary.scalar)
     def discriminator_loss(self, real_targets, fake_targets, real_predictions, fake_predictions):
         ''' loss of discriminator with given predictions '''
         return (0.5 * tf.losses.log_loss(real_targets, real_predictions)
@@ -88,7 +93,7 @@ class CGAN:
 
     def train(self, sess, real_dataset, label_set, lr=0.0001, epochs=200, optimizer=tf.train.MomentumOptimizer,
               log_dir='./logs/', save_period=None, save_dir='./ckpt'):
-        """
+        '''
         train cGAN model with given dataset
 
         :param sess:
@@ -99,7 +104,7 @@ class CGAN:
         :param optimizer:
         :param log_dir:
         :return:
-        """
+        '''
         # set iterator
         real_dataset_iterator = real_dataset.make_initializable_iterator()
         label_iterator = label_set.make_initializable_iterator()
@@ -107,7 +112,7 @@ class CGAN:
         # data to feed
         labels = label_iterator.get_next()
         real_data = real_dataset_iterator.get_next()
-        noises = tf.random_normal(labels.shape)
+        noises = tf.random_normal((labels.shape[0], self.noise_len))
 
         # outputs of networks
         generated_image = self.generator(noises, labels, is_training=True)
@@ -125,12 +130,13 @@ class CGAN:
         var_init_op = tf.global_variables_initializer()
         label_iter_init_op = label_iterator.initializer
         data_iter_init_op = real_dataset_iterator.initializer
-        gen_train_op = optimizer(learning_rate=lr).minimize(gen_loss, var_list=self.generator_params)
+
         disc_train_op = optimizer(learning_rate=lr).minimize(disc_loss, var_list=self.discriminator_params)
+        with tf.control_dependencies([disc_train_op]):
+            gen_train_op = optimizer(learning_rate=lr).minimize(gen_loss, var_list=self.generator_params)
 
         # summaries
-        # TODO(shylee2021): implement summaries
-        summaries = None
+        summaries = tf.summary.merge_all()
 
         # set logger
         sess.run(var_init_op)
@@ -139,20 +145,16 @@ class CGAN:
 
         global_step = 0
         for epoch in range(epochs):
-            sess.run(label_iter_init_op)
-            sess.run(data_iter_init_op)
+            sess.run([label_iter_init_op, data_iter_init_op])
 
             while True:
                 try:
-                    _, summary_str = sess.run([gen_train_op, summaries])
-                    _, summary_str = sess.run([disc_train_op, summaries])
-                    loss_disc, loss_gen = sess.run([disc_loss, gen_loss])
+                    _, _, loss_disc, loss_gen, summary_str = sess.run([disc_train_op, gen_train_op, disc_loss, gen_loss, summaries])
 
                     writer.add_summary(summary_str, global_step=global_step)
                     print_with_time(
-                        '(epoch {epoch}, step {step:03}, lr={lr}) loss of generator: {loss_gen}, loss of discriminator: {loss_disc}' \
-                            .format(epoch=epoch, step=global_step, loss_gen=loss_gen, loss_disc=loss_disc, lr=lr))
-                except OutOfRangeError:
+                        f'(epoch {epoch}, step {global_step:03}, lr={lr}) loss of generator: {gen_loss}, loss of discriminator: {disc_loss}')
+                except tf.errors.OutOfRangeError:
                     break
                 else:
                     global_step += 1
