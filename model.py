@@ -91,8 +91,8 @@ class CGAN:
         ''' parameters of discriminator '''
         return tf.trainable_variables(scope='discriminator')
 
-    def train(self, sess, real_dataset, label_set, lr=0.0001, epochs=200, optimizer=tf.train.MomentumOptimizer,
-              log_dir='./logs/', save_period=None, save_dir='./ckpt'):
+    def train(self, sess, dataset, lr=0.0001, epochs=200, optimizer=tf.train.MomentumOptimizer,
+              log_dir='logs/', save_period=None, save_dir='ckpt/'):
         '''
         train cGAN model with given dataset
 
@@ -106,18 +106,18 @@ class CGAN:
         :return:
         '''
         # set iterator
-        real_dataset_iterator = real_dataset.make_initializable_iterator()
-        label_iterator = label_set.make_initializable_iterator()
+        data_iterator = dataset.make_initializable_iterator()
 
         # data to feed
-        labels = label_iterator.get_next()
-        real_data = real_dataset_iterator.get_next()
+        batch = data_iterator.get_next()
+        data = batch['data']
+        labels = batch['labels']
         noises = tf.random_normal((labels.shape[0], self.noise_len))
 
         # outputs of networks
         generated_image = self.generator(noises, labels, is_training=True)
         fake_pred = self.discriminator(generated_image, labels, is_training=True)
-        real_pred = self.discriminator(real_data, labels, is_training=True)
+        real_pred = self.discriminator(data, labels, is_training=True)
 
         real_targets = tf.ones_like(real_pred)
         fake_targets = tf.zeros_like(fake_pred)
@@ -128,8 +128,7 @@ class CGAN:
 
         # operations
         var_init_op = tf.global_variables_initializer()
-        label_iter_init_op = label_iterator.initializer
-        data_iter_init_op = real_dataset_iterator.initializer
+        data_iter_init_op = data_iterator.initializer
 
         disc_train_op = optimizer(learning_rate=lr).minimize(disc_loss, var_list=self.discriminator_params)
         with tf.control_dependencies([disc_train_op]):
@@ -139,13 +138,17 @@ class CGAN:
         summaries = tf.summary.merge_all()
 
         # set logger
-        sess.run(var_init_op)
         log_path = os.path.join(log_dir, self.name)
         writer = tf.summary.FileWriter(log_path, sess.graph)
 
+        # set saver
+        saver = tf.train.Saver()
+        save_path = os.path.join(save_dir, self.name)
+
         global_step = 0
+        sess.run(var_init_op)
         for epoch in range(epochs):
-            sess.run([label_iter_init_op, data_iter_init_op])
+            sess.run(data_iter_init_op)
 
             while True:
                 try:
@@ -160,10 +163,33 @@ class CGAN:
                     global_step += 1
 
             if save_period is not None and (epoch+1) / save_period == 0:
-                self.save_ckpt(save_dir)
+                saver.save(sess, save_path, global_step=global_step)
 
-    def save_ckpt(self, save_dir='./ckpt'):
-        pass
+    def export(self, sess, export_dir):
+        '''
+        export servable tensorflow model
 
-    def export(self):
-        pass
+        :param sess: `tf.Session()`
+        :param export_dir: str to directory to export
+        '''
+        builder = tf.saved_model.builder.SavedModelBuilder(export_dir)
+        input_label = tf.placeholder(tf.float32, (None, 10))
+
+        input_label_info = tf.saved_model.utils.build_tensor_info(input_label)
+        generated = self.generate_images(input_label)
+        generated_info = tf.saved_model.utils.build_tensor_info(generated)
+
+        signature_def = tf.saved_model.build_signature_def(
+            inputs={'label': input_label_info},
+            outputs={'generated': generated_info},
+            method_name=tf.saved_model.signature_constants.PREDICT_METHOD_NAME
+        )
+
+        builder.add_meta_graph_and_variables(
+            sess,
+            [tf.saved_model.tag_constants.SERVING],
+            signature_def_map={
+                'generated_images': signature_def
+            })
+
+        builder.save()
