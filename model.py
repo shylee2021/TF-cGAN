@@ -26,33 +26,18 @@ class CGAN:
         :return:
         '''
         with tf.variable_scope('generator', reuse=tf.AUTO_REUSE):
+            weight_init = tf.contrib.layers.xavier_initializer()
+
             onehot_labels = tf.one_hot(labels, depth=10, dtype=tf.float32)
 
-            h1_1 = tf.layers.dense(noises, 200, activation=leaky_relu, use_bias=False,
-                                   kernel_initializer=tf.initializers.truncated_normal(stddev=0.02) ,name='dense1_noise')
+            combined = tf.concat([noises, onehot_labels], axis=1, name='combined')
+            dense1 = tf.layers.dense(combined, 128, activation=tf.nn.relu,
+                                     kernel_initializer=weight_init, name='dense1')
+            dense2 = tf.layers.dense(dense1, 28*28, activation=None,
+                                     kernel_initializer=weight_init, name='dense2')
+            flat_outputs = tf.nn.tanh(dense2, name='tanh')
 
-            h1_2 = tf.layers.dense(onehot_labels, 1000, activation=leaky_relu, use_bias=False,
-                                   kernel_initializer=tf.initializers.truncated_normal(stddev=0.02), name='dense1_label')
-
-            h1_c = tf.concat([h1_1, h1_2], axis=1, name='dense1_combined')
-            d1_c = tf.layers.batch_normalization(h1_c, momentum=0.8, training=is_training, name='bn1')
-
-            h2 = tf.layers.dense(d1_c, 1200, activation=leaky_relu, use_bias=False,
-                                 kernel_initializer=tf.initializers.truncated_normal(stddev=0.02), name='dense2')
-            d2 = tf.layers.batch_normalization(h2, momentum=0.8, training=is_training, name='bn2')
-
-            h3 = tf.layers.dense(d2, 1200, activation=leaky_relu, use_bias=False,
-                                 kernel_initializer=tf.initializers.truncated_normal(stddev=0.02), name='dense3')
-            d3 = tf.layers.batch_normalization(h3, momentum=0.8, training=is_training, name='bn3')
-
-            h4 = tf.layers.dense(d3, 1000, activation=leaky_relu, use_bias=False,
-                                 kernel_initializer=tf.initializers.truncated_normal(stddev=0.02), name='dense4')
-            d4 = tf.layers.batch_normalization(h4, momentum=0.8, training=is_training, name='bn4')
-
-            h5 = tf.layers.dense(d4, 784, use_bias=False, kernel_initializer=tf.initializers.truncated_normal(stddev=0.02), name='dense5')
-            sig = tf.nn.tanh(h5, name='tanh')
-
-            return tf.reshape(sig, [-1, 28, 28], name='generated')
+            return tf.reshape(flat_outputs, [-1, 28, 28], name='generated')
 
     def discriminator(self, inputs, labels, is_training=False):
         '''
@@ -63,20 +48,17 @@ class CGAN:
         :return:
         '''
         with tf.variable_scope('discriminator', reuse=tf.AUTO_REUSE):
+            weight_init = tf.contrib.layers.xavier_initializer()
+
             onehot_labels = tf.one_hot(labels, depth=10, dtype=tf.float32)
             flatten_inputs = tf.reshape(inputs, [-1, 28*28])
 
-            conditioned_inputs = tf.concat([flatten_inputs, onehot_labels], axis=1)
-
-            h1 = tf.layers.dense(conditioned_inputs, 256, activation=leaky_relu, use_bias=True,
-                                 kernel_initializer=tf.contrib.layers.xavier_initializer(), name='dense1')
-            d1 = tf.layers.batch_normalization(h1, momentum=0.8, training=is_training, name='bn1')
-            h2 = tf.layers.dense(d1, 256, activation=leaky_relu, use_bias=True,
-                                 kernel_initializer=tf.contrib.layers.xavier_initializer(), name='dense2')
-            d2 = tf.layers.batch_normalization(h2, momentum=0.8, training=is_training, name='bn2')
-            h3 = tf.layers.dense(d2, 1, use_bias=True,
-                                 kernel_initializer=tf.contrib.layers.xavier_initializer(), name='dense3')
-            outputs = tf.nn.sigmoid(h3, name='probability')
+            conditioned_inputs = tf.concat([flatten_inputs, onehot_labels], axis=1, name='conditioned_inputs')
+            dense1 = tf.layers.dense(conditioned_inputs, 128, activation=leaky_relu,
+                                     kernel_initializer=weight_init, name='dense1')
+            dense2 = tf.layers.dense(dense1, 1, activation=None,
+                                     kernel_initializer=weight_init, name='dense2')
+            outputs = tf.nn.sigmoid(dense2, name='probability')
 
             return outputs
 
@@ -169,7 +151,6 @@ class CGAN:
 
         # learning rate decay
         global_step = tf.Variable(0, trainable=False, name='global_step')
-        # lr = tf.maximum(tf.train.exponential_decay(base_lr, global_step, decay_steps=1, decay_rate=(1/1.00004)), 0.000003)
         lr = base_lr
 
         # operations
