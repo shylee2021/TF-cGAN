@@ -5,7 +5,7 @@ def preprocess(data_dict):
     data = data_dict['data']
     data = tf.cast(data, tf.float32)
     data /= 255.0
-    # data = data * 2.0 - 1.0
+    data = data * 2.0 - 1.0
 
     return {'data': data, 'labels': data_dict['labels']}
 
