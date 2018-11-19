@@ -11,13 +11,13 @@ from utils import ReusableGraph
 
 
 class CGAN:
-    def __init__(self, name):
+    def __init__(self, name: str):
         self.name = name
         self.noise_len = 100
 
         self._build_graph_for_export()
 
-    def generator(self, noises, labels, is_training=False):
+    def generator(self, noises: tf.Tensor, labels: tf.Tensor, is_training=False):
         '''
 
         :param noises:
@@ -82,17 +82,11 @@ class CGAN:
         return loss
 
     @add_summary('discriminator_loss', tf.summary.scalar)
-    def discriminator_loss(self, real_targets, fake_targets, real_predictions, fake_predictions, flip=False):
+    def discriminator_loss(self, real_targets, fake_targets, real_predictions, fake_predictions):
         ''' loss of discriminator with given predictions '''
         with tf.name_scope('discriminator_loss'):
-
-            loss = tf.cond(
-                flip,
-                lambda: 0.5 * tf.losses.log_loss(real_targets, real_predictions)
-                        + 0.5 * tf.losses.log_loss(fake_targets, fake_predictions),
-                lambda: 0.5 * tf.losses.log_loss(fake_targets, real_predictions)
-                        + 0.5 * tf.losses.log_loss(real_targets, fake_predictions)
-            )
+            loss = 0.5 * tf.losses.log_loss(real_targets, real_predictions) \
+                   + 0.5 * tf.losses.log_loss(fake_targets, fake_predictions)
 
         return loss
 
@@ -110,7 +104,18 @@ class CGAN:
         self.input_label = tf.placeholder(tf.int32, (None,))
         self.generated = self.generate_images(self.input_label)
 
-    def train(self, sess, dataset, base_lr=3e-8, epochs=300, log_dir='logs/', save_period=None, save_dir='ckpt/'):
+    def get_next_data(self, iterator: tf.data.Iterator):
+        batch = iterator.get_next()
+        data = batch['data']
+
+        labels = batch['labels']
+
+        dim = tf.convert_to_tensor([tf.shape(data)[0], self.noise_len], dtype=tf.int32)
+        noises = tf.random.truncated_normal(dim)
+
+        return data, labels, noises
+
+    def train(self, sess, dataset, base_lr=0.0002, epochs=100, log_dir='logs/', save_period=None, save_dir='ckpt/'):
         '''
         train cGAN model with given dataset
 
@@ -123,49 +128,41 @@ class CGAN:
         :param log_dir:
         :return:
         '''
-        # set iterator
+        # get data to feed
         data_iterator = dataset.make_initializable_iterator()
-
-        # data to feed
-        batch = data_iterator.get_next()
-        data = batch['data']
-        labels = batch['labels']
-        dim = tf.convert_to_tensor([tf.shape(data)[0], self.noise_len], dtype=tf.int32)
-        noises = tf.random.truncated_normal(dim)
+        data, labels, noises = self.get_next_data(data_iterator)
 
         # outputs of networks
         generated_image = self.generator(noises, labels, is_training=True)
         fake_pred = self.discriminator(generated_image, labels, is_training=True)
         real_pred = self.discriminator(data, labels, is_training=True)
 
-        soft_fake_targets = tf.zeros_like(fake_pred)
-        soft_real_targets = tf.ones_like(real_pred) * 0.9
-
-        hard_real_targets = tf.ones_like(real_pred)
+        fake_targets = tf.zeros_like(fake_pred)
+        real_targets = tf.ones_like(real_pred)
 
         # losses
-        gen_loss = self.generator_loss(hard_real_targets, fake_pred)
+        gen_loss = self.generator_loss(real_targets, fake_pred)
+        disc_loss = self.discriminator_loss(real_targets, fake_targets, real_pred, fake_pred)
 
-        flip_prob = tf.random.uniform(shape=[])
-        disc_loss = self.discriminator_loss(soft_real_targets, soft_fake_targets, real_pred, fake_pred, flip=(flip_prob > 0.95))
-
-        # learning rate decay
-        global_step = tf.Variable(0, trainable=False, name='global_step')
+        # learning rate
         lr = base_lr
+
+        # global step
+        global_step = tf.Variable(0, trainable=False, name='global_step')
 
         # operations
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(update_ops):
-            disc_train_op = tf.train.MomentumOptimizer(learning_rate=lr, momentum=0.7).minimize(disc_loss, var_list=self.discriminator_params)
+            disc_train_op = tf.train.AdamOptimizer(learning_rate=lr, beta1=0.5).minimize(disc_loss, var_list=self.discriminator_params)
             with tf.control_dependencies([disc_train_op]):
-                gen_train_op = tf.train.AdamOptimizer(learning_rate=lr).minimize(gen_loss, var_list=self.generator_params, global_step=global_step)
+                gen_train_op = tf.train.AdamOptimizer(learning_rate=lr, beta1=0.5).minimize(gen_loss, var_list=self.generator_params, global_step=global_step)
 
+        # initialisation op
         var_init_op = tf.global_variables_initializer()
         data_iter_init_op = data_iterator.initializer
 
         # summaries
         tf.summary.image('real_images', tf.expand_dims(data, -1), max_outputs=16)
-        # tf.summary.scalar('learning rate', lr)
         tf.summary.image('generated_images', tf.expand_dims(generated_image, -1), max_outputs=16)
         summaries = tf.summary.merge_all()
 
@@ -183,13 +180,12 @@ class CGAN:
 
             while True:
                 try:
-                    _, disc_loss_value, gen_loss_value, summary_str, flip_val = sess.run([gen_train_op, disc_loss, gen_loss, summaries, flip_prob])
+                    _, disc_loss_value, gen_loss_value, summary_str = sess.run([gen_train_op, disc_loss, gen_loss, summaries])
 
-                    flipped = (flip_val > 0.95)
                     step_value = tf.train.global_step(sess, global_step)
                     writer.add_summary(summary_str, global_step=step_value)
                     print_with_time(
-                        f'(epoch {epoch}, step {step_value:03}, lr={lr:.3e}) loss of generator: {gen_loss_value:2.6f}, loss of discriminator: {disc_loss_value:2.6f}, flipped: {flipped}')
+                        f'(epoch {epoch}, step {step_value:03}, lr={lr:.3e}) loss of generator: {gen_loss_value:2.6f}, loss of discriminator: {disc_loss_value:2.6f}')
                 except tf.errors.OutOfRangeError:
                     break
 
@@ -225,9 +221,6 @@ class CGAN:
             })
 
         builder.save()
-
-
-
 
 def leaky_relu(x):
     return tf.nn.leaky_relu(x, alpha=0.2)
