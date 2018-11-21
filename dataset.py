@@ -2,6 +2,7 @@ import tensorflow as tf
 
 
 def preprocess(data_dict):
+    """ Preprocesses for single data dictionary """
     data = data_dict['data']
     data = tf.cast(data, tf.float32)
     data /= 255.0
@@ -10,6 +11,7 @@ def preprocess(data_dict):
     return {'data': data, 'labels': data_dict['labels']}
 
 def get_mnist_dataset(batch_size=128):
+    """ Returns MNIST dataset with given batch size. """
     train, test = tf.keras.datasets.mnist.load_data()
     train_x, train_y = train
     test_x, test_y = test

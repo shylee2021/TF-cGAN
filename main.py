@@ -8,6 +8,7 @@ from utils import print_with_time
 
 
 def train(args):
+    """ train model """
     batch_size = args.batch_size
     epochs = args.epochs
     base_lr = args.lr
