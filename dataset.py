@@ -10,6 +10,7 @@ def preprocess(data_dict):
 
     return {'data': data, 'labels': data_dict['labels']}
 
+
 def get_mnist_dataset(batch_size=128):
     """ Returns MNIST dataset with given batch size. """
     train, test = tf.keras.datasets.mnist.load_data()
@@ -19,11 +20,11 @@ def get_mnist_dataset(batch_size=128):
     with tf.name_scope('train_dataset'):
         train_dataset = tf.data.Dataset.from_tensor_slices({'data': train_x, 'labels': train_y})
         train_dataset = train_dataset.map(preprocess) \
-                                     .shuffle(100000).batch(batch_size).prefetch(10)
+            .shuffle(100000).batch(batch_size).prefetch(10)
 
     with tf.name_scope('test_dataset'):
         test_dataset = tf.data.Dataset.from_tensor_slices({'data': test_x, 'labels': test_y})
-        test_dataset = test_dataset.map(preprocess)\
-                                   .batch(batch_size).prefetch(10)
+        test_dataset = test_dataset.map(preprocess) \
+            .batch(batch_size).prefetch(10)
 
     return train_dataset, test_dataset

@@ -27,12 +27,13 @@ def train(args):
             print_with_time('Saving servable..')
             cgan.export(sess, export_dir='export/')
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--name', help='name of model', default='cGAN')
     parser.add_argument('-b', '--batch_size', help='batch size', default=128, type=int)
     parser.add_argument('-e', '--epochs', help='the number of epochs', default=300, type=int)
     parser.add_argument('-l', '--lr', help='base learning rate', default=3e-8, type=float)
-    args = parser.parse_args()
+    parsed_args = parser.parse_args()
 
-    train(args)
+    train(parsed_args)

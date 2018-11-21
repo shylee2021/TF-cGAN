@@ -1,11 +1,9 @@
 import os
 import shutil
-
 import tensorflow as tf
 
 from utils import add_summary
 from utils import print_with_time
-
 
 
 class CGAN:
@@ -19,6 +17,7 @@ class CGAN:
         https://arxiv.org/abs/1411.1784
         \"Conditional Generative Adversarial Nets\", Mirza & Osindero
     """
+
     def __init__(self, name: str):
         self.name = name
         self.noise_len = 100
@@ -46,7 +45,7 @@ class CGAN:
             combined = tf.concat([noises, onehot_labels], axis=1, name='combined')
             dense1 = tf.layers.dense(combined, 128, activation=tf.nn.relu,
                                      kernel_initializer=weight_init, name='dense1')
-            dense2 = tf.layers.dense(dense1, 28*28, activation=None,
+            dense2 = tf.layers.dense(dense1, 28 * 28, activation=None,
                                      kernel_initializer=weight_init, name='dense2')
             flat_outputs = tf.nn.tanh(dense2, name='tanh')
 
@@ -69,7 +68,7 @@ class CGAN:
             weight_init = tf.contrib.layers.xavier_initializer()
 
             onehot_labels = tf.one_hot(labels, depth=10, dtype=tf.float32)
-            flatten_inputs = tf.reshape(inputs, [-1, 28*28])
+            flatten_inputs = tf.reshape(inputs, [-1, 28 * 28])
 
             conditioned_inputs = tf.concat([flatten_inputs, onehot_labels], axis=1, name='conditioned_inputs')
             dense1 = tf.layers.dense(conditioned_inputs, 128, activation=leaky_relu,
@@ -250,7 +249,8 @@ class CGAN:
 
             while True:
                 try:
-                    _, disc_loss_value, gen_loss_value, summary_str = sess.run([train_op, disc_loss, gen_loss, summaries])
+                    _, disc_loss_value, gen_loss_value, summary_str = sess.run(
+                        [train_op, disc_loss, gen_loss, summaries])
 
                     step_value = tf.train.global_step(sess, global_step)
                     writer.add_summary(summary_str, global_step=step_value)
@@ -261,7 +261,7 @@ class CGAN:
                 except tf.errors.OutOfRangeError:
                     break
 
-            if save_period is not None and (epoch+1) % save_period == 0:
+            if save_period is not None and (epoch + 1) % save_period == 0:
                 saver.save(sess, save_path, global_step=global_step)
 
     def export(self, sess, export_dir, version):
@@ -296,6 +296,7 @@ class CGAN:
             })
 
         builder.save()
+
 
 def leaky_relu(x):
     """ Leaky ReLU with slope 0.2 for negative x range """
