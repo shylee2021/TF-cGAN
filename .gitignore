@@ -143,3 +143,11 @@ Temporary Items
 
 # pycharm
 .idea
+
+# patch file
+*.patch
+
+# directories for training
+ckpt/
+export/
+logs/
