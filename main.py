@@ -18,14 +18,15 @@ def train(args):
 
     with tf.Session() as sess:
         try:
-            cgan.train(sess, train_dataset, base_lr=base_lr, epochs=epochs, save_period=10, reset_logs=args.reset_log)
+            cgan.train(sess, train_dataset, base_lr=base_lr, epochs=epochs, save_period=10, reset_logs=args.reset_logs,
+                       version=args.version)
         except KeyboardInterrupt:
             print_with_time('Interrupted by user.')
         else:
             print_with_time('Training finished.')
         finally:
             print_with_time('Saving servable..')
-            cgan.export(sess, export_dir='export/', version=args.version)
+            cgan.export(sess, export_dir=f'{args.name}_export', version=args.version)
 
 
 if __name__ == '__main__':

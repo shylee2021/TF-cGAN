@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import shutil
 import tensorflow as tf
 
@@ -189,10 +190,8 @@ class CGAN:
         return gen_train_op
 
     def train(self, sess, dataset, base_lr=0.0002, epochs=100, log_dir='logs/', save_period=None, save_dir='ckpt/',
-              reset_logs=False):
+              reset_logs=False, version='1'):
         """ Trains cGAN model with given dataset.
-
-        If `save_period` is `None`, checkpoint is not saved during training session.
 
         Args:
             sess (tf.Session): Session to train the model with.
@@ -200,8 +199,11 @@ class CGAN:
             base_lr (float): The starting learning rate.
             epochs (int): The number of epochs to train the model. Defaults to 0.0002
             log_dir (str): Directory to save logs for TensorBoard.
-            save_period (int, optional):
+            save_period (int, optional): Period to save checkpoint.
+                If `save_period` is `None`, checkpoint is not saved during training session.
             save_dir (str): Directory to save checkpoint.
+            reset_logs (bool): Flag whether reset all the logs before training.
+            versions (str): The version of model.
         """
         # get data to feed
         data_iterator = dataset.make_initializable_iterator()
@@ -236,12 +238,16 @@ class CGAN:
         summaries = tf.summary.merge_all()
 
         # set logger
-        log_path = os.path.join(log_dir, self.name)
-        writer = tf.summary.FileWriter(log_path, sess.graph)
+        log_path = Path(log_dir) / self.name / version
+        if reset_logs and log_path.exists():
+            shutil.rmtree(log_path)
+        writer = tf.summary.FileWriter(str(log_path), sess.graph)
 
         # set saver
         saver = tf.train.Saver()
-        save_path = os.path.join(save_dir, self.name)
+        save_path = Path(save_dir) / self.name / version
+        if reset_logs and save_path.exists():
+            shutil.rmtree(save_path)
 
         # train model
         sess.run(var_init_op)
@@ -263,7 +269,7 @@ class CGAN:
                     break
 
             if save_period is not None and (epoch + 1) % save_period == 0:
-                saver.save(sess, save_path, global_step=global_step)
+                saver.save(sess, str(save_path), global_step=global_step)
 
     def export(self, sess, export_dir, version):
         """ export servable tensorflow model
@@ -273,12 +279,12 @@ class CGAN:
             export_dir: str to directory to export
             version: version of model
         """
-        export_path = os.path.join(export_dir, version)
+        export_path = Path(export_dir) / version
 
-        if os.path.exists(export_path):
+        if export_path.exists():
             shutil.rmtree(export_path)
 
-        builder = tf.saved_model.builder.SavedModelBuilder(export_path)
+        builder = tf.saved_model.builder.SavedModelBuilder(str(export_path))
 
         input_label_info = tf.saved_model.utils.build_tensor_info(self.input_label)
         generated_info = tf.saved_model.utils.build_tensor_info(self.generated)
