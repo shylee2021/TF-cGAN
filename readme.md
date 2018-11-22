@@ -28,8 +28,8 @@ in-progress
 
 ## To-do
 
--[ ] Build test interface
--[ ] Add serialised inputs for TF Serving
--[ ] Switch from `tf.layers` to `tf.keras.layers` (due to deprecation of `tf.layers` in TensorFlow 2.0)  
--[ ] Support various datasets
--[ ] Replace results into clean images rather than captured one from TensorBoard
+* Build test interface
+* Add serialised inputs for TF Serving
+* Switch from `tf.layers` to `tf.keras.layers` (due to deprecation of `tf.layers` in TensorFlow 2.0)  
+* Support various datasets
+* Replace results into clean images rather than captured one from TensorBoard
