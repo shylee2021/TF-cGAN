@@ -18,7 +18,7 @@ def train(args):
 
     with tf.Session() as sess:
         try:
-            cgan.train(sess, train_dataset, base_lr=base_lr, epochs=epochs, save_period=10)
+            cgan.train(sess, train_dataset, base_lr=base_lr, epochs=epochs, save_period=10, reset_logs=args.reset_log)
         except KeyboardInterrupt:
             print_with_time('Interrupted by user.')
         else:
@@ -31,10 +31,11 @@ def train(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--name', help='name of model', default='cGAN')
-    parser.add_argument('-b', '--batch_size', help='batch size', default=128, type=int)
+    parser.add_argument('-b', '--batch-size', help='batch size', default=128, type=int)
     parser.add_argument('-e', '--epochs', help='the number of epochs', default=300, type=int)
     parser.add_argument('-l', '--lr', help='base learning rate', default=3e-8, type=float)
     parser.add_argument('-v', '--version', help='model version', default='1')
+    parser.add_argument('--reset-logs', help='clear logs before start training', action='store_true')
     parsed_args = parser.parse_args()
 
     train(parsed_args)

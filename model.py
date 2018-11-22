@@ -188,7 +188,8 @@ class CGAN:
 
         return gen_train_op
 
-    def train(self, sess, dataset, base_lr=0.0002, epochs=100, log_dir='logs/', save_period=None, save_dir='ckpt/'):
+    def train(self, sess, dataset, base_lr=0.0002, epochs=100, log_dir='logs/', save_period=None, save_dir='ckpt/',
+              reset_logs=False):
         """ Trains cGAN model with given dataset.
 
         If `save_period` is `None`, checkpoint is not saved during training session.
