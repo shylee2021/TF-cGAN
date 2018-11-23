@@ -140,8 +140,13 @@ class CGAN:
 
     def _build_graph_for_export(self):
         """ Build graph for export servable version of model """
-        self.input_label = tf.placeholder(tf.int32, (None,))
-        self.generated = self.generate_images(self.input_label)
+        self.serialized_inputs = tf.placeholder(tf.string, shape=[None], name='serialized_inputs')
+        self.feature_config = {'input_labels': tf.io.FixedLenFeature([], tf.string)}
+
+        tf_example = tf.parse_example(self.serialized_inputs, self.feature_config)
+        self.inputs_for_inference = tf.identity(tf_example['input_labels'], name='inputs')
+
+        self.generated = self.generate_images(self.inputs_for_inference)
 
     def get_next_data(self, iterator):
         """ Returns the batch of inputs.
@@ -284,9 +289,10 @@ class CGAN:
         if export_path.exists():
             shutil.rmtree(export_path)
 
+        # make SavedModel builder
         builder = tf.saved_model.builder.SavedModelBuilder(str(export_path))
 
-        input_label_info = tf.saved_model.utils.build_tensor_info(self.input_label)
+        input_label_info = tf.saved_model.utils.build_tensor_info(self.inputs_for_inference)
         generated_info = tf.saved_model.utils.build_tensor_info(self.generated)
 
         signature_def = tf.saved_model.build_signature_def(
@@ -299,7 +305,7 @@ class CGAN:
             sess,
             [tf.saved_model.tag_constants.SERVING],
             signature_def_map={
-                'generated_images': signature_def
+                'generated_images': signature_def,
             })
 
         builder.save()
